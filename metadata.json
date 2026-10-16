@@ -1,0 +1,6 @@
+{
+  "name": "أقرأها صح - منصة تعليم القراءة والنطق الفصيح",
+  "description": "تطبيق أقرأها صح، المبادرة المجتمعية التعليمية الرائدة بإشراف المهندس شوقي حسن الجعور لتمكين تلاميذ المرحلة الابتدائية من إتقان القراءة والكتابة والنطق الفصيح.",
+  "requestFramePermissions": ["microphone"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
