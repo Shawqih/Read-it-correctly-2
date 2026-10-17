@@ -195,58 +195,54 @@ on:
     branches: [ "main", "master" ]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  build-apk:
+  build:
+    name: Build Android APK
     runs-on: ubuntu-latest
+
     steps:
-    - name: Checkout Code
-      uses: actions/checkout@v4
+      - name: 📥 استنساخ المستودع (Checkout Code)
+        uses: actions/checkout@v4
 
-    - name: Set up Node.js 20
-      uses: actions/setup-node@v4
-      with:
-        node-version: 20
-        cache: 'npm'
+      - name: 🟢 إعداد بيئة Node.js (Setup Node.js)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
 
-    - name: Install & Build Web App
-      run: |
-        npm ci || npm install
-        npm run build
+      - name: 📦 تثبيت الحزم وبناء واجهة الويب (Build Web Assets)
+        run: |
+          npm ci || npm install
+          npm run build
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+      - name: 📂 تحديث ملفات الويب في مشروع أندرويد (Sync Web Assets)
+        run: |
+          mkdir -p android/app/src/main/assets/www
+          cp -r dist/* android/app/src/main/assets/www/
 
-    - name: Setup Android SDK
-      uses: android-actions/setup-android@v3
+      - name: ☕ إعداد بيئة Java 17 (Setup JDK 17)
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
 
-    - name: Sync Capacitor Android
-      run: |
-        npm install --save-dev @capacitor/cli @capacitor/core @capacitor/android
-        if [ ! -d "android" ]; then npx cap add android; fi
-        npx cap sync android
+      - name: 🐘 إعداد Gradle الرسمي (Setup Gradle)
+        uses: gradle/actions/setup-gradle@v4
 
-    - name: Build Android Debug & Release APK
-      run: |
-        cd android
-        chmod +x gradlew
-        ./gradlew assembleDebug --stacktrace
-        ./gradlew assembleRelease --stacktrace || echo "Release built"
+      - name: 🔨 بناء نسخة أندرويد APK (Build Android APK with Gradle)
+        run: |
+          cd android
+          gradle assembleDebug --no-daemon --stacktrace
 
-    - name: Upload Debug APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: aqraha-sah-debug-apk
-        path: android/app/build/outputs/apk/debug/*.apk
-
-    - name: Upload Release APK
-      uses: actions/upload-artifact@v4
-      with:
-        name: aqraha-sah-release-apk
-        path: android/app/build/outputs/apk/release/*.apk`;
+      - name: 📤 رفع ملف الـ APK كعنصر قابل للتحميل المباشر (Upload APK Artifact)
+        uses: actions/upload-artifact@v4
+        with:
+          name: aqraha-sah-android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
+          retention-days: 30`;
 
   const GIT_TERMINAL_COMMANDS = `# 1. تهيئة المستودع
 git init

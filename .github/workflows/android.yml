@@ -6,22 +6,12 @@ on:
   pull_request:
     branches: [ "main", "master" ]
   workflow_dispatch:
-    inputs:
-      build_type:
-        description: 'نوع البناء (Build Type)'
-        required: true
-        default: 'both'
-        type: choice
-        options:
-          - 'debug'
-          - 'release'
-          - 'both'
 
 permissions:
   contents: write
 
 jobs:
-  build-apk:
+  build:
     name: Build Android APK
     runs-on: ubuntu-latest
 
@@ -35,107 +25,52 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: 📦 تثبيت الحزم وبناء واجهة الويب (Install & Build Web Assets)
+      - name: 📦 تثبيت الحزم وبناء واجهة الويب (Build Web Assets)
         run: |
           npm ci || npm install
           npm run build
 
-      - name: ☕ إعداد بيئة Java JDK 17 (Setup JDK 17)
+      - name: 📂 تحديث ملفات الويب في مشروع أندرويد (Sync Web Assets)
+        run: |
+          mkdir -p android/app/src/main/assets/www
+          cp -r dist/* android/app/src/main/assets/www/
+
+      - name: ☕ إعداد بيئة Java 17 (Setup JDK 17)
         uses: actions/setup-java@v4
         with:
           java-version: '17'
           distribution: 'temurin'
-          cache: 'gradle'
 
-      - name: 📱 إعداد حزمة تطوير أندرويد (Setup Android SDK)
-        uses: android-actions/setup-android@v3
+      - name: 🐘 إعداد Gradle الرسمي (Setup Gradle)
+        uses: gradle/actions/setup-gradle@v4
 
-      - name: ⚙️ تهيئة ومزامنة مشروع أندرويد (Configure Android Project)
+      - name: 🔨 بناء نسخة أندرويد APK (Build Android APK with Gradle)
         run: |
-          # تثبيت حزم Capacitor لأندرويد إذا لم تكن موجودة
-          npm install --save-dev @capacitor/cli @capacitor/core @capacitor/android
+          cd android
+          gradle assembleDebug --no-daemon --stacktrace
 
-          # إنشاء مجلد أندرويد إذا لم يكن موجوداً
-          if [ ! -d "android" ]; then
-            echo "Creating native Android project..."
-            npx cap add android
-          fi
-
-          # مزامنة أحدث ملفات الويب المبنية مع تطبيق أندرويد
-          npx cap sync android
-
-          # إضافة أذونات الميكروفون والإنترنت لتطبيق أندرويد في AndroidManifest.xml
-          MANIFEST_FILE="android/app/src/main/AndroidManifest.xml"
-          if [ -f "$MANIFEST_FILE" ]; then
-            if ! grep -q "android.permission.RECORD_AUDIO" "$MANIFEST_FILE"; then
-              sed -i '/<manifest/a \    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n    <uses-permission android:name="android.permission.INTERNET" />' "$MANIFEST_FILE"
-            fi
-            # تفعيل دعم اللغة العربية من اليمين إلى اليسار (RTL)
-            sed -i 's/android:supportsRtl="false"/android:supportsRtl="true"/g' "$MANIFEST_FILE"
-          fi
-
-      - name: 🔑 منح صلاحيات التنفيذ لـ Gradle (Grant Gradle Permissions)
+      - name: 🔍 التحقق من مسار ملف الـ APK (Locate Generated APK)
+        id: locate_apk
         run: |
-          if [ -f "android/gradlew" ]; then
-            chmod +x android/gradlew
-          elif [ -f "./gradlew" ]; then
-            chmod +x ./gradlew
-          fi
+          echo "Finding generated APKs:"
+          find android/app/build/outputs/apk/ -name "*.apk" -type f
 
-      - name: 🔨 بناء نسخة التجربة (Build Debug APK)
-        if: ${{ github.event.inputs.build_type == 'debug' || github.event.inputs.build_type == 'both' || github.event_name != 'workflow_dispatch' }}
-        run: |
-          if [ -d "android" ]; then
-            cd android && ./gradlew assembleDebug --stacktrace
-          else
-            ./gradlew assembleDebug --stacktrace
-          fi
-
-      - name: 🚀 بناء نسخة الإصدار (Build Release APK)
-        if: ${{ github.event.inputs.build_type == 'release' || github.event.inputs.build_type == 'both' || github.event_name != 'workflow_dispatch' }}
-        run: |
-          if [ -d "android" ]; then
-            cd android && ./gradlew assembleRelease --stacktrace || echo "Release build completed with notes"
-          else
-            ./gradlew assembleRelease --stacktrace || echo "Release build completed with notes"
-          fi
-
-      - name: 🔍 التحقق من مسارات ملفات الـ APK الناتجة (Locate APK Files)
-        id: find_apks
-        run: |
-          echo "Listing generated APK files:"
-          find . -name "*.apk" -type f
-
-      - name: 📤 رفع ملف Debug APK كعنصر قابل للتنزيل (Upload Debug APK)
+      - name: 📤 رفع ملف الـ APK كعنصر قابل للتحميل المباشر (Upload APK Artifact)
         uses: actions/upload-artifact@v4
         with:
-          name: aqraha-sah-debug-apk
-          path: |
-            android/app/build/outputs/apk/debug/*.apk
-            app/build/outputs/apk/debug/*.apk
-          if-no-files-found: warn
-          retention-days: 30
-
-      - name: 📤 رفع ملف Release APK كعنصر قابل للتنزيل (Upload Release APK)
-        uses: actions/upload-artifact@v4
-        with:
-          name: aqraha-sah-release-apk
-          path: |
-            android/app/build/outputs/apk/release/*.apk
-            app/build/outputs/apk/release/*.apk
-          if-no-files-found: warn
+          name: aqraha-sah-android-debug-apk
+          path: android/app/build/outputs/apk/debug/*.apk
           retention-days: 30
 
       - name: 📋 ملخص التقرير والإرشادات (Job Summary)
         run: |
-          echo "## 🎉 تم بناء تطبيق «أقرأها صح» بنجاح!" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎉 تم بناء تطبيق «أقرأها صح» أندرويد بنجاح!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "- **اسم التطبيق:** أقرأها صح (Aqraha Sah)" >> $GITHUB_STEP_SUMMARY
           echo "- **المعرف (App ID):** com.aqraha.sah" >> $GITHUB_STEP_SUMMARY
           echo "- **المشرف العام:** م/ شوقي حسن الجعور" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          echo "### 📲 كيفية تثبيت التطبيق على هاتفك أو جهازك اللوحي:" >> $GITHUB_STEP_SUMMARY
-          echo "1. انتقل إلى قسم **Artifacts** في صفحة هذا الـ Workflow." >> $GITHUB_STEP_SUMMARY
-          echo "2. قم بتحميل ملف **aqraha-sah-debug-apk** وفك الضغط عنه." >> $GITHUB_STEP_SUMMARY
-          echo "3. انقل ملف الـ \`.apk\` إلى هاتفك أو قم بفتحه مباشرة للتثبيت." >> $GITHUB_STEP_SUMMARY
-          echo "4. التطبيق يدعم العمل الكامل بدون اتصال بالإنترنت مع دعم التسجيل الصوتي." >> $GITHUB_STEP_SUMMARY
+          echo "### 📲 كيفية تحميل وتثبيت التطبيق على هاتفك:" >> $GITHUB_STEP_SUMMARY
+          echo "1. اضغط على رابط التحميل في قسم **Artifacts** بالأسفل: **aqraha-sah-android-debug-apk**." >> $GITHUB_STEP_SUMMARY
+          echo "2. فك الضغط عن الملف المحمل." >> $GITHUB_STEP_SUMMARY
+          echo "3. قم بنقل وتثبيت ملف \`app-debug.apk\` على هاتفك أو جهازك اللوحي بنظام أندرويد." >> $GITHUB_STEP_SUMMARY

@@ -1,0 +1,6 @@
+<resources>
+    <style name="Theme.AqrahaSah" parent="Theme.MaterialComponents.DayNight.NoActionBar">
+        <item name="android:statusBarColor">#1d4ed8</item>
+        <item name="android:windowLightStatusBar">false</item>
+    </style>
+</resources>
