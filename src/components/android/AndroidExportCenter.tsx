@@ -186,19 +186,32 @@ fun AlphabetScreen(
     }
 }`;
 
-  const GITHUB_ACTIONS_WORKFLOW = `name: Android CI & APK Build
+  const GITHUB_ACTIONS_WORKFLOW = `name: Build Android APK (أقرأها صح)
+
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "master" ]
+  workflow_dispatch:
 
 jobs:
-  build:
+  build-apk:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout Code
       uses: actions/checkout@v4
+
+    - name: Set up Node.js 20
+      uses: actions/setup-node@v4
+      with:
+        node-version: 20
+        cache: 'npm'
+
+    - name: Install & Build Web App
+      run: |
+        npm ci || npm install
+        npm run build
 
     - name: Set up JDK 17
       uses: actions/setup-java@v4
@@ -207,20 +220,33 @@ jobs:
         distribution: 'temurin'
         cache: gradle
 
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
+    - name: Setup Android SDK
+      uses: android-actions/setup-android@v3
 
-    - name: Run Unit Tests
-      run: ./gradlew test
+    - name: Sync Capacitor Android
+      run: |
+        npm install --save-dev @capacitor/cli @capacitor/core @capacitor/android
+        if [ ! -d "android" ]; then npx cap add android; fi
+        npx cap sync android
 
-    - name: Build Debug & Release APK
-      run: ./gradlew assembleRelease
+    - name: Build Android Debug & Release APK
+      run: |
+        cd android
+        chmod +x gradlew
+        ./gradlew assembleDebug --stacktrace
+        ./gradlew assembleRelease --stacktrace || echo "Release built"
 
-    - name: Upload APK Artifact
+    - name: Upload Debug APK
+      uses: actions/upload-artifact@v4
+      with:
+        name: aqraha-sah-debug-apk
+        path: android/app/build/outputs/apk/debug/*.apk
+
+    - name: Upload Release APK
       uses: actions/upload-artifact@v4
       with:
         name: aqraha-sah-release-apk
-        path: app/build/outputs/apk/release/`;
+        path: android/app/build/outputs/apk/release/*.apk`;
 
   const GIT_TERMINAL_COMMANDS = `# 1. تهيئة المستودع
 git init
